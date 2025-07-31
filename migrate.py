@@ -53,7 +53,7 @@ from github import Github, GithubObject, InputFileContent
 from github.Attachment import Attachment
 from github.NamedUser import NamedUser
 from github.Repository import Repository
-from github.GithubException import IncompletableObject
+from github.GithubException import IncompletableObject, GithubException
 from enum import Enum
 
 from migration_archive_writer import MigrationArchiveWritingRequester
@@ -92,6 +92,13 @@ else :
     config.read('migrate.cfg')
 
 trac_url = config.get('source', 'url')
+
+# Get clean URL for public display (without credentials)
+if config.has_option('source', 'public_url'):
+    trac_public_url = config.get('source', 'public_url')
+else:
+    # Fallback to using the regular URL
+    trac_public_url = trac_url
 
 cgit_url = None
 if config.has_option('source', 'cgit_url'):
@@ -149,6 +156,10 @@ trac_url_wiki = os.path.join(trac_url_dir, subdir.wiki.value)
 trac_url_query = os.path.join(trac_url_dir, subdir.query.value)
 trac_url_report = os.path.join(trac_url_dir, subdir.report.value)
 trac_url_attachment = os.path.join(trac_url_dir, subdir.attachment.value)
+
+# Public URLs for display in issues
+trac_public_url_dir = os.path.dirname(trac_public_url)
+trac_public_url_ticket = os.path.join(trac_public_url_dir, subdir.ticket.value)
 
 if config.has_option('target', 'issues_repo_url'):
     target_url_issues_repo = config.get('target', 'issues_repo_url')
@@ -719,8 +730,8 @@ def github_mention(match):
     username = match.group(1)
     github_username = convert_trac_username(username, is_mention=True)
     if github_username:
-        return '@' + github_username
-    return '`@`' + username
+        return github_username
+    return username
 
 def trac2markdown(text, base_path, conv_help, multilines=default_multilines):
     # conversion of url
@@ -1630,8 +1641,7 @@ def map_component(component):
     try:
         label = components_to_labels[component]
     except KeyError:
-        # Prefix it with "c: " so that they show up as one group in the GitHub dropdown list
-        label = f'c: {component}'
+        label = component
     component_frequency[label] += 1
     return label
 
@@ -1655,6 +1665,8 @@ def map_severity(severity):
 
 def map_status(status):
     "Return a pair: (status, label)"
+    if status is None:
+        return 'open', None
     status = status.lower()
     if status in ['needs_review', 'needs_work', 'needs_info', 'positive_review']:
         return 'open', 's: ' + status.replace('_', ' ')
@@ -1733,15 +1745,22 @@ def gh_ensure_label(dest, labelname, label_color=None, label_category=None):
         label_color = labelcolor.get(labelname)
     if label_color is None:
         label_color = labelcolor[label_category]
-    log.info('Create label "%s" with color #%s' % (labelname, label_color));
-    gh_label = dest.create_label(labelname, label_color);
-    gh_labels[labelname] = gh_label;
+    if not labelname:
+        return
+    log.info('Create label "%s" with color #%s' % (labelname, label_color))
+    gh_label = dest.create_label(labelname, label_color)
+    gh_labels[labelname] = gh_label
     sleep(sleep_after_request)
 
 def gh_create_issue(dest, issue_data) :
     if dest is None : return None
     if 'labels' in issue_data:
-        labels = [gh_labels[label.lower()] for label in issue_data.pop('labels')]
+        try:
+            label_objects = [gh_labels[label.lower()] for label in issue_data.pop('labels')]
+            # Extract label names from Label objects for GitHub API
+            labels = [label.name for label in label_objects]
+        except KeyError:
+            labels = GithubObject.NotSet
     else:
         labels = GithubObject.NotSet
 
@@ -1821,27 +1840,28 @@ mime_type_allowed_extensions = {
 def gh_create_attachment(dest, issue, filename, src_ticket_id, attachment=None, comment=None):
     note = None
     if attachment_export:
+        # Determine mimetype for all modes
+        match mimetypes.guess_type(filename):
+            case (None, encoding):
+                mimetype = "application/octet-stream"
+            case (mimetype, encoding):
+                pass
+            case mimetype:
+                pass
+
+        if filename.endswith('.log'):
+            # Python thinks it's text/plain.
+            mimetype = 'text/x-log'
+        elif filename.endswith('.gz'):
+            # Python thinks that .tar.gz is application/x-tar
+            mimetype = 'application/gzip'
+
+        logging.info(f'Attachment {filename=} {mimetype=}')
+        
         if github:
             a_path = attachment_path(src_ticket_id, filename)
             local_filename = os.path.join(attachment_export_dir, 'attachments', a_path)
         else:
-            match mimetypes.guess_type(filename):
-                case (None, encoding):
-                    mimetype = "application/octet-stream"
-                case (mimetype, encoding):
-                    pass
-                case mimetype:
-                    pass
-
-            if filename.endswith('.log'):
-                # Python thinks it's text/plain.
-                mimetype = 'text/x-log'
-            elif filename.endswith('.gz'):
-                # Python thinks that .tar.gz is application/x-tar
-                mimetype = 'application/gzip'
-
-            logging.info(f'Attachment {filename=} {mimetype=}')
-
             allowed_extensions = mime_type_allowed_extensions.get(mimetype, [])
             if not any(filename.endswith(ext) for ext in allowed_extensions):
                 mimetype = "application/octet-stream"  # which is not an allowed mime type, so will be gzipped.
@@ -1850,9 +1870,10 @@ def gh_create_attachment(dest, issue, filename, src_ticket_id, attachment=None, 
             if mimetype in ['image/gif', 'image/jpeg', 'image/png']:
                 # on GHE attachment URLs are rewritten to "/storage/user" paths, links broken.
                 # so we just did everything via repository_file, not attachment
+                # GitHub API doesn't support direct issue attachments, use repository files instead
                 dirname = 'files'
-                if issue:
-                    create = issue.create_attachment
+                if dest:
+                    create = dest.create_repository_file
             else:
                 # Cannot make it an "attachment"(?)
                 if mimetype not in ['text/plain', 'text/x-log', 'application/gzip', 'application/zip']:
@@ -1869,6 +1890,12 @@ def gh_create_attachment(dest, issue, filename, src_ticket_id, attachment=None, 
             a_path = attachment_path(src_ticket_id, filename)
             local_filename = os.path.join(migration_archive, dirname, a_path)
         if github or not attachment:
+            def create(asset_name, asset_content_type, asset_url, **kwds):
+                # Only create the record locally
+                return Attachment(dest._requester, None, {'url': attachment_export_url + a_path},
+                                  completed=True)
+        elif not github:
+            # Migration archive mode - override any previous create_repository_file assignment
             def create(asset_name, asset_content_type, asset_url, **kwds):
                 # Only create the record locally
                 return Attachment(dest._requester, None, {'url': attachment_export_url + a_path},
@@ -2086,7 +2113,7 @@ def gh_username(dest, origname):
     username = convert_trac_username(origname)
     if username:
         _gh_user(dest, username, origname)
-        return '@' + username
+        return username
     return origname
 
 gh_users = {}
@@ -2094,13 +2121,18 @@ def _gh_user(dest, username, origname):
     try:
         return gh_users[username]
     except KeyError:
-        headers, data = dest._requester.requestJsonAndCheck(
-            "GET", f"/users/{username}", input={'name': user_full_names.get(origname)}
-        )
-        gh_users[username] = NamedUser(
-            dest._requester, headers, data, completed=True
-        )
-        return gh_users[username]
+        try:
+            headers, data = dest._requester.requestJsonAndCheck(
+                "GET", f"/users/{username}", input={'name': user_full_names.get(origname)}
+            )
+            gh_users[username] = NamedUser(
+                dest._requester, headers, data, completed=True
+            )
+            return gh_users[username]
+        except GithubException:
+            # User doesn't exist on GitHub, cache None to avoid repeated lookups
+            gh_users[username] = None
+            return None
 
 def gh_user_url(dest, origname):
     if origname.startswith('@'):
@@ -2110,7 +2142,10 @@ def gh_user_url(dest, origname):
         username = convert_trac_username(origname)
         if not username:
             return None
-    return _gh_user(dest, username, origname).url
+    user = _gh_user(dest, username, origname)
+    if user is None:
+        return None
+    return user.url
 
 def gh_user_url_list(dest, orignames, ignore=['somebody', 'tbd', 'tdb', 'tba']):
     if not orignames:
@@ -2336,7 +2371,7 @@ def convert_issues(source, dest, only_issues = None, blacklist_issues = None):
             description_post_items = sorted(description_post_items, key=item_key)
             description_post += '\n\n' + '\n\n'.join(description_post_items)
 
-            description_post += f'\n\n_Issue created by migration from {trac_url_ticket}/{src_ticket_id}_\n\n'
+            description_post += f'\n\n_Issue created by migration from {trac_public_url_ticket}/{src_ticket_id}_\n\n'
 
             return description_pre + trac2markdown(description, '/issues/', conv_help, False) + description_post
 
@@ -2461,14 +2496,21 @@ def convert_issues(source, dest, only_issues = None, blacklist_issues = None):
         if milestone:
             issue_data['milestone'] = milestone
 
+        # Always get the reporter for use in issue creation
+        reporter = tmp_src_ticket_data.pop('reporter')
+        
         if not github:
-            issue_data['user'] = gh_username(dest, tmp_src_ticket_data.pop('reporter'))
+            issue_data['user'] = gh_username(dest, reporter)
             issue_data['created_at'] = convert_xmlrpc_datetime(time_created)
             issue_data['updated_at'] = convert_xmlrpc_datetime(time_changed)
             issue_data['number'] = int(src_ticket_id)
             issue_data['reactions'] = []
             assignees = gh_user_url_list(dest, tmp_src_ticket_data.pop('owner'))
             issue_data['assignees'] = assignees
+        else:
+            # For GitHub API mode, store reporter and creation time for use in description
+            issue_data['user'] = gh_username(dest, reporter)
+            issue_data['created_at'] = convert_xmlrpc_datetime(time_created)
 
             # Find closed_at
             for time, author, change_type, oldvalue, newvalue, permanent in reversed(changelog):
