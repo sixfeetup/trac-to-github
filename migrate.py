@@ -271,7 +271,7 @@ if attachment_export:
         attachment_export_url = target_url_issues_repo
         if not attachment_export_url.endswith('/') :
             attachment_export_url += '/'
-        attachment_export_url += 'files/'
+        attachment_export_url += 'blob/main/'
 
 must_convert_wiki = config.getboolean('wiki', 'migrate')
 wiki_export_dir = None
@@ -368,6 +368,8 @@ RE_ATTACHMENT5 = re.compile(r'(?<=\s)attachment:([^\s]+)\.\s')
 RE_ATTACHMENT6 = re.compile(r'^attachment:([^\s]+)\.\s')
 RE_ATTACHMENT7 = re.compile(r'(?<=\s)attachment:([^\s]+)')
 RE_ATTACHMENT8 = re.compile(r'^attachment:([^\s]+)')
+RE_CHANGESET1 = re.compile(r'\[changeset:"([0-9a-f]+)/[^"]*"\s+([0-9a-f]+)/[^\]]*\]')
+RE_CHANGESET2 = re.compile(r'\[changeset:([0-9a-f]+)\]')
 RE_LINEBREAK1= re.compile(r'(\[\[br\]\])')
 RE_LINEBREAK2 = re.compile(r'(\[\[BR\]\])')
 RE_LINEBREAK3 = re.compile(r'(\\\\\s*)')
@@ -1016,6 +1018,10 @@ def trac2markdown(text, base_path, conv_help, multilines=default_multilines):
             line = RE_ATTACHMENT6.sub(conv_help.attachment, line)
             line = RE_ATTACHMENT7.sub(conv_help.attachment, line)
             line = RE_ATTACHMENT8.sub(conv_help.attachment, line)
+
+            # Convert Trac changeset references to GitHub commit links
+            line = RE_CHANGESET1.sub(lambda m: f'[{m.group(1)[:7]}]({target_url_git_repo}/commit/{m.group(1)})', line)
+            line = RE_CHANGESET2.sub(lambda m: f'[{m.group(1)[:7]}]({target_url_git_repo}/commit/{m.group(1)})', line)
 
             if in_table:
                 line = RE_LINEBREAK1.sub('<br>', line)
@@ -2588,24 +2594,63 @@ def convert_issues(source, dest, only_issues = None, blacklist_issues = None):
         for change in changelog:
             time, author, change_type, oldvalue, newvalue, permanent = change
             change_time = str(convert_xmlrpc_datetime(time))
-            #print(change)
-            log.debug("  %s by %s (%s -> %s)" % (change_type, author, str(oldvalue)[:40].replace("\n", " "), str(newvalue)[:40].replace("\n", " ")))
-            #assert attachment is None or change_type == "comment", "an attachment must be followed by a comment"
-            # if author in ['anonymous', 'Draftmen888'] :
-            #     print ("  SKIPPING CHANGE BY", author)
-            #     continue
-            user = gh_username(dest, author)
-            user_url = gh_user_url(dest, author)
+            
+            # Process comments and attachments normally
+            if change_type in ["attachment", "comment"]:
+                log.debug("  %s by %s (%s -> %s)" % (change_type, author, str(oldvalue)[:40].replace("\n", " "), str(newvalue)[:40].replace("\n", " ")))
+                
+                user = gh_username(dest, author)
+                user_url = gh_user_url(dest, author)
 
-            comment_data = {
-                'created_at': convert_trac_datetime(change_time),
-                'user': user,
-                'formatter': 'markdown',
-            }
-            event_data = {
-                'created_at': convert_trac_datetime(change_time),
-                'actor': user_url,
-            }
+                comment_data = {
+                    'created_at': convert_trac_datetime(change_time),
+                    'user': user,
+                    'formatter': 'markdown',
+                }
+                event_data = {
+                    'created_at': convert_trac_datetime(change_time),
+                    'actor': user_url,
+                }
+            
+            # Process label-affecting field changes silently (no comments, just update labels)
+            if change_type == "status":
+                issue_state, new_labels = change_status(newvalue)
+                labels = new_labels
+            elif change_type == "resolution":
+                oldresolution = map_resolution(oldvalue)
+                newresolution = map_resolution(newvalue)
+                labels = update_labels(labels, newresolution, oldresolution, 'resolution')
+            elif change_type == "component":
+                oldlabel = map_component(oldvalue)
+                newlabel = map_component(newvalue)
+                labels = update_labels(labels, newlabel, oldlabel, 'component')
+            elif change_type == "milestone":
+                oldmilestone, oldlabel = map_milestone(oldvalue)
+                newmilestone, newlabel = map_milestone(newvalue)
+                labels = update_labels(labels, newlabel, oldlabel, 'milestone')
+            elif change_type == "type":
+                oldtype = map_tickettype(oldvalue)
+                newtype = map_tickettype(newvalue)
+                labels = update_labels(labels, newtype, oldtype, 'type')
+            elif change_type == "priority":
+                oldlabel = map_priority(oldvalue)
+                newlabel = map_priority(newvalue)
+                labels = update_labels(labels, newlabel, oldlabel, 'priority')
+            elif change_type == "severity":
+                oldlabel = map_severity(oldvalue)
+                newlabel = map_severity(newvalue)
+                labels = update_labels(labels, newlabel, oldlabel, 'severity')
+            elif change_type == "keywords":
+                oldkeywords, oldkeywordlabels = map_keywords(oldvalue)
+                newkeywords, newkeywordlabels = map_keywords(newvalue)
+                for label in oldkeywordlabels:
+                    with contextlib.suppress(ValueError):
+                        labels.remove(label)
+                for label in newkeywordlabels:
+                    labels.append(label)
+                    gh_ensure_label(dest, label, label_category='keyword')
+            
+            # Continue with comment/attachment processing
             if change_type == "attachment":
                 # The attachment may be described in the next comment
                 attachments.append({'attachment': get_ticket_attachment(source, src_ticket_id, newvalue).data,
@@ -2627,129 +2672,6 @@ def convert_issues(source, dest, only_issues = None, blacklist_issues = None):
                 # e.g., see http://localhost:8080/ticket/3431#comment:9 http://localhost:8080/ticket/3400#comment:14
                 # we will forget about these old versions and only keep the latest one
                 pass
-            elif change_type == "status" :
-                issue_state, labels = change_status(newvalue)
-            elif change_type == "resolution" :
-                oldresolution = map_resolution(oldvalue)
-                newresolution = map_resolution(newvalue)
-                labels = update_labels(labels, newresolution, oldresolution, 'resolution')
-            elif change_type == "component" :
-                oldlabel = map_component(oldvalue)
-                newlabel = map_component(newvalue)
-                labels = update_labels(labels, newlabel, oldlabel, 'component')
-            elif change_type == "owner" :
-                oldvalue = gh_user_url_list(dest, oldvalue)
-                newvalue = gh_user_url_list(dest, newvalue)
-                gh_update_issue_property(dest, issue, 'assignees', newvalue, oldval=oldvalue, **event_data)
-                # oldvalue = gh_username_list(dest, oldvalue)
-                # newvalue = gh_username_list(dest, newvalue)
-                # if oldvalue and newvalue:
-                #     comment_data['note'] = 'Changed assignee from ' + attr_value(oldvalue) + ' to ' + attr_value(newvalue)
-                # elif newvalue:
-                #     comment_data['note'] = 'Assignee: ' + attr_value(newvalue)
-                # else:
-                #     comment_data['note'] = 'Removed assignee ' + attr_value(oldvalue)
-                # if newvalue != oldvalue:
-                #     gh_comment_issue(dest, issue, comment_data, src_ticket_id)
-            elif change_type == "version" :
-                if oldvalue != '':
-                    desc = "Changed version from %s to %s." % (attr_value(oldvalue), attr_value(newvalue))
-                else:
-                    desc = "Version: " + attr_value(newvalue)
-                comment_data['note'] = desc
-                gh_comment_issue(dest, issue, comment_data, src_ticket_id)
-            elif change_type == "milestone" :
-                oldmilestone, oldlabel = map_milestone(oldvalue)
-                newmilestone, newlabel = map_milestone(newvalue)
-                if oldmilestone and oldmilestone in milestone_map:
-                    oldmilestone = milestone_map[oldmilestone]
-                else:
-                    if oldmilestone:
-                        logging.warning(f'Ignoring unknown milestone "{oldmilestone}"')
-                        unmapped_milestones[oldmilestone] += 1
-                    oldmilestone = GithubObject.NotSet
-                if newmilestone and newmilestone in milestone_map:
-                    newmilestone = milestone_map[newmilestone]
-                else:
-                    if newmilestone:
-                        logging.warning(f'Ignoring unknown milestone "{newmilestone}"')
-                        unmapped_milestones[newmilestone] += 1
-                    newmilestone = GithubObject.NotSet
-                if oldmilestone != newmilestone:
-                    gh_update_issue_property(dest, issue, 'milestone',
-                                             newmilestone, oldval=oldmilestone, **event_data)
-                labels = update_labels(labels, newlabel, oldlabel, 'milestone')
-            elif change_type == "cc" :
-                pass  # we handle only the final list of CCs (above)
-            elif change_type == "type" :
-                oldtype = map_tickettype(oldvalue)
-                newtype = map_tickettype(newvalue)
-                labels = update_labels(labels, newtype, oldtype, 'type')
-            elif change_type == "description" :
-                if github:
-                    issue_data['description'] = issue_description(src_ticket_data) + '\n\n(changed by ' + user + ' at ' + change_time + ')'
-                    gh_update_issue_property(dest, issue, 'description', issue_data['description'], **event_data)
-                else:
-                    body = 'Description changed:\n``````diff\n'
-                    old_description = trac2markdown(oldvalue, '/issues/', conv_help, False)
-                    new_description = trac2markdown(newvalue, '/issues/', conv_help, False)
-                    body += '\n'.join(unified_diff(old_description.split('\n'),
-                                                   new_description.split('\n'),
-                                                   lineterm=''))
-                    body += '\n``````\n'
-                    comment_data['note'] = body
-                    gh_comment_issue(dest, issue, comment_data, src_ticket_id)
-            elif change_type == "summary" :
-                oldtitle, oldstatus = title_status(oldvalue)
-                title, status = title_status(newvalue)
-                if title != oldtitle:
-                    issue_data['title'] = title
-                    gh_update_issue_property(dest, issue, 'title', title, oldval=oldtitle, **event_data)
-                if status is not None:
-                    issue_state, labels = change_status(status)
-            elif change_type == "priority" :
-                oldlabel = map_priority(oldvalue)
-                newlabel = map_priority(newvalue)
-                labels = update_labels(labels, newlabel, oldlabel, 'priority')
-            elif change_type == "severity" :
-                oldlabel = map_severity(oldvalue)
-                newlabel = map_severity(newvalue)
-                labels = update_labels(labels, newlabel, oldlabel, 'severity')
-            elif change_type == "keywords" :
-                oldlabels = copy(labels)
-                oldkeywords, oldkeywordlabels = map_keywords(oldvalue)
-                newkeywords, newkeywordlabels = map_keywords(newvalue)
-                for label in oldkeywordlabels:
-                    with contextlib.suppress(ValueError):
-                        labels.remove(label)
-                for label in newkeywordlabels:
-                    labels.append(label)
-                    gh_ensure_label(dest, label, label_category='keyword')
-                if oldkeywords != newkeywords:
-                    comment_data['note'] = 'Changed keywords from ' + attr_value(', '.join(oldkeywords)) + ' to ' + attr_value(', '.join(newkeywords))
-                    gh_comment_issue(dest, issue, comment_data, src_ticket_id)
-                if labels != oldlabels:
-                    gh_update_issue_property(dest, issue, 'labels', labels, oldval=oldlabels, **event_data)
-            else:
-                if oldvalue in ignored_values:
-                    oldvalue = ''
-                if newvalue in ignored_values:
-                    newvalue = ''
-                if oldvalue != newvalue:
-                    if change_type in ['branch', 'commit']:
-                        if oldvalue:
-                            oldvalue = github_ref_markdown(oldvalue)
-                        if newvalue:
-                            if re.fullmatch('[0-9a-f]{40}', newvalue):
-                                # Store for closing references
-                                last_sha = newvalue
-                            newvalue = github_ref_markdown(newvalue)
-                    change_type = change_type.replace('_', ' ')
-                    if not oldvalue:
-                        comment_data['note'] = f'{change_type.title()}: {attr_value(newvalue)}'
-                    else:
-                        comment_data['note'] = f'Changed {change_type} from {attr_value(oldvalue)} to {attr_value(newvalue)}'
-                    gh_comment_issue(dest, issue, comment_data, src_ticket_id)
 
         if attachments:
             comment_data['attachments'] = attachments
