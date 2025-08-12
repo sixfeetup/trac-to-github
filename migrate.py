@@ -2629,6 +2629,9 @@ def convert_issues(source, dest, only_issues = None, blacklist_issues = None):
             elif change_type == "summary":
                 # Update the source data to reflect final state
                 src_ticket_data['summary'] = newvalue
+            elif change_type == "owner":
+                # Update the source data to reflect final assignee
+                src_ticket_data['owner'] = newvalue
             elif change_type == "milestone":
                 oldmilestone, oldlabel = map_milestone(oldvalue)
                 newmilestone, newlabel = map_milestone(newvalue)
@@ -2688,6 +2691,13 @@ def convert_issues(source, dest, only_issues = None, blacklist_issues = None):
         final_title, _ = title_status(src_ticket_data.get('summary', 'No title'))
         if github and final_title != issue_data.get('title'):
             gh_update_issue_property(dest, issue, 'title', final_title)
+        
+        # Update assignee to final state based on username mapping
+        final_owner = src_ticket_data.get('owner')
+        if final_owner and github:
+            final_assignee = gh_user_url_list(dest, final_owner)
+            if final_assignee:
+                gh_update_issue_property(dest, issue, 'assignees', final_assignee, oldval=[])
 
         ticketcount += 1
         if ticketcount % 10 == 0 and sleep_after_10tickets > 0 :
