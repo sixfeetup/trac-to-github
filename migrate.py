@@ -2713,7 +2713,7 @@ def convert_issues(source, dest, only_issues = None, blacklist_issues = None):
             attachments = []
             gh_comment_issue(dest, issue, comment_data, src_ticket_id, minimize=False)
 
-        # Update title to final state after processing all changes
+        # Update all fields to final state after processing all changes
         final_title, _ = title_status(src_ticket_data.get('summary', 'No title'))
         if github and final_title != issue_data.get('title'):
             gh_update_issue_property(dest, issue, 'title', final_title)
@@ -2732,6 +2732,22 @@ def convert_issues(source, dest, only_issues = None, blacklist_issues = None):
             # Get the mapped username as a string
             mapped_username = gh_username(dest, final_owner)
             final_assignee_name = mapped_username if mapped_username else final_owner
+
+        # Update milestone to final state
+        if github and migrate_milestones:
+            final_milestone_name = src_ticket_data.get('milestone')
+            if final_milestone_name:
+                final_milestone_mapped, _ = map_milestone(final_milestone_name)
+                if final_milestone_mapped and final_milestone_mapped in milestone_map:
+                    final_milestone = milestone_map[final_milestone_mapped]
+                    gh_update_issue_property(dest, issue, 'milestone', final_milestone)
+
+        # Update issue description with final values
+        if github:
+            # Create a copy since issue_description modifies the data
+            final_ticket_data = copy(src_ticket_data)
+            final_description = issue_description(final_ticket_data)
+            gh_update_issue_property(dest, issue, 'description', final_description)
 
         # Write CSV row for this issue
         issue_url = f"{target_url_issues_repo}/issues/{issue.number}" if github else ""
