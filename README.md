@@ -1,3 +1,33 @@
+Six Feet Up Usage
+=================
+
+The sections below are the original README. This section is specifically for how we use this script at Six Feet Up.
+
+This script accesses Trac values via XMLRPC. This endpoint is restricted so it can only be accessed by scripts running on the Trac server.
+
+Setup:
+* Log into the Trac server
+* Check out the repo
+* create a virtualenv
+* `$ source env/bin/activate`
+* `$ pip install -r requirements.txt`
+* `$ cp migrate.cfg.sfupexample migrate.cfg`
+
+Edit the `migrate.cfg`. There are various values in `[source]` and `[target]` that need to be updated with your project name.
+
+Credentials:
+* "Trac Admin" in 1Password for admin username and password for Trac - used in `[source]`:`url`
+* Christine's GitHub access token (`token` in migrate.cfg). This means that Christine's user needs to have permission to create issues in the target repo.
+
+Running the script:
+* Use a tmux session in case you get disconnected
+* When running on a new project, delete the cache: `$ rm -rf trac_cache`
+* With the virtualenv active, run `$ ./migrate.py`
+
+Post-migration steps:
+* The script will output `migrated_issues.csv`. Use this to run https://github.com/hillairet/ciftt for updating the approprite values on the GitHub issues
+* The script also saves all the attachments to a folder (`archive/attachments/`), and these need to be checked in to git. Clone the repo set in `issues_repo_url`. Copy all the folders (`ticket10`, `ticket35`, etc) from the attachments folder in to the root of the repo, and check them in.
+
 What
 =====
 
