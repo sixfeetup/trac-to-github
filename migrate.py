@@ -95,7 +95,9 @@ else :
 trac_url = config.get('source', 'url')
 
 # Get clean URL for public display (without credentials)
-if config.has_option('source', 'public_url'):
+if config.has_option('source', 'trac_public_url'):
+    trac_public_url = config.get('source', 'trac_public_url')
+elif config.has_option('source', 'public_url'):
     trac_public_url = config.get('source', 'public_url')
 else:
     # Fallback to using the regular URL
