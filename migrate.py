@@ -2595,21 +2595,23 @@ def convert_issues(source, dest, only_issues = None, blacklist_issues = None):
             time, author, change_type, oldvalue, newvalue, permanent = change
             change_time = str(convert_xmlrpc_datetime(time))
             
+            # Set up user and event data for all change types
+            user = gh_username(dest, author)
+            user_url = gh_user_url(dest, author)
+            
+            event_data = {
+                'created_at': convert_trac_datetime(change_time),
+                'actor': user_url,
+            }
+            
             # Process comments and attachments normally
             if change_type in ["attachment", "comment"]:
                 log.debug("  %s by %s (%s -> %s)" % (change_type, author, str(oldvalue)[:40].replace("\n", " "), str(newvalue)[:40].replace("\n", " ")))
                 
-                user = gh_username(dest, author)
-                user_url = gh_user_url(dest, author)
-
                 comment_data = {
                     'created_at': convert_trac_datetime(change_time),
                     'user': user,
                     'formatter': 'markdown',
-                }
-                event_data = {
-                    'created_at': convert_trac_datetime(change_time),
-                    'actor': user_url,
                 }
             
             # Process label-affecting field changes silently (no comments, just update labels)
@@ -2624,6 +2626,16 @@ def convert_issues(source, dest, only_issues = None, blacklist_issues = None):
                 oldlabel = map_component(oldvalue)
                 newlabel = map_component(newvalue)
                 labels = update_labels(labels, newlabel, oldlabel, 'component')
+            elif change_type == "summary":
+                oldtitle, oldstatus = title_status(oldvalue)
+                title, status = title_status(newvalue)
+                if title != oldtitle:
+                    issue_data['title'] = title
+                    if github:
+                        gh_update_issue_property(dest, issue, 'title', title, oldval=oldtitle, **event_data)
+                if status is not None:
+                    issue_state, new_labels = change_status(status)
+                    labels = new_labels
             elif change_type == "milestone":
                 oldmilestone, oldlabel = map_milestone(oldvalue)
                 newmilestone, newlabel = map_milestone(newvalue)
