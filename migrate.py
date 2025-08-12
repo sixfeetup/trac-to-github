@@ -2626,10 +2626,14 @@ def convert_issues(source, dest, only_issues = None, blacklist_issues = None):
                 issue_state, new_labels = change_status(newvalue)
                 # labels = new_labels
             elif change_type == "resolution":
+                # Update the source data to reflect final resolution
+                src_ticket_data['resolution'] = newvalue
                 oldresolution = map_resolution(oldvalue)
                 newresolution = map_resolution(newvalue)
                 # labels = update_labels(labels, newresolution, oldresolution, 'resolution')
             elif change_type == "component":
+                # Update the source data to reflect final component
+                src_ticket_data['component'] = newvalue
                 oldlabel = map_component(oldvalue)
                 newlabel = map_component(newvalue)
                 # labels = update_labels(labels, newlabel, oldlabel, 'component')
@@ -2640,22 +2644,32 @@ def convert_issues(source, dest, only_issues = None, blacklist_issues = None):
                 # Update the source data to reflect final assignee
                 src_ticket_data['owner'] = newvalue
             elif change_type == "milestone":
+                # Update the source data to reflect final milestone
+                src_ticket_data['milestone'] = newvalue
                 oldmilestone, oldlabel = map_milestone(oldvalue)
                 newmilestone, newlabel = map_milestone(newvalue)
                 # labels = update_labels(labels, newlabel, oldlabel, 'milestone')
             elif change_type == "type":
+                # Update the source data to reflect final type
+                src_ticket_data['type'] = newvalue
                 oldtype = map_tickettype(oldvalue)
                 newtype = map_tickettype(newvalue)
                 # labels = update_labels(labels, newtype, oldtype, 'type')
             elif change_type == "priority":
+                # Update the source data to reflect final priority
+                src_ticket_data['priority'] = newvalue
                 oldlabel = map_priority(oldvalue)
                 newlabel = map_priority(newvalue)
                 # labels = update_labels(labels, newlabel, oldlabel, 'priority')
             elif change_type == "severity":
+                # Update the source data to reflect final severity
+                src_ticket_data['severity'] = newvalue
                 oldlabel = map_severity(oldvalue)
                 newlabel = map_severity(newvalue)
                 # labels = update_labels(labels, newlabel, oldlabel, 'severity')
             elif change_type == "keywords":
+                # Update the source data to reflect final keywords
+                src_ticket_data['keywords'] = newvalue
                 # oldkeywords, oldkeywordlabels = map_keywords(oldvalue)
                 # newkeywords, newkeywordlabels = map_keywords(newvalue)
                 # for label in oldkeywordlabels:
@@ -2665,6 +2679,9 @@ def convert_issues(source, dest, only_issues = None, blacklist_issues = None):
                 #     labels.append(label)
                 #     gh_ensure_label(dest, label, label_category='keyword')
                 pass
+            elif change_type == "description":
+                # Update the source data to reflect final description
+                src_ticket_data['description'] = newvalue
             
             # Continue with comment/attachment processing
             if change_type == "attachment":
