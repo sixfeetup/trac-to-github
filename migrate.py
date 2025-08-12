@@ -2461,9 +2461,9 @@ def convert_issues(source, dest, only_issues = None, blacklist_issues = None):
 
             status = src_ticket_data.pop('status', status)
             issue_state, label = map_status(status)
-            if label:
-                labels.append(label)
-                gh_ensure_label(dest, label, label_category='resolution')
+            # if label:
+            #     labels.append(label)
+            #     gh_ensure_label(dest, label, label_category='resolution')
 
             labels = normalize_labels(dest, labels)
             return milestone, labels
@@ -2528,10 +2528,6 @@ def convert_issues(source, dest, only_issues = None, blacklist_issues = None):
 
         issue_data['description'] = issue_description(tmp_src_ticket_data)
 
-        # Update title to final state after processing all changes
-        final_title, _ = title_status(src_ticket_data.get('summary', 'No title'))
-        issue_data['title'] = final_title
-
         issue = gh_create_issue(dest, issue_data)
 
         def update_labels(labels, add_label, remove_label, label_category='type'):
@@ -2581,7 +2577,7 @@ def convert_issues(source, dest, only_issues = None, blacklist_issues = None):
             src_ticket_data['status'] = newvalue
             oldstate, oldlabel = map_status(oldvalue)
             newstate, newlabel = map_status(newvalue)
-            new_labels = update_labels(labels, newlabel, oldlabel)
+            # new_labels = update_labels(labels, newlabel, oldlabel)
             if issue_state != newstate :
                 if newstate == 'closed' and last_sha:
                     if closing_sha := closing_commits.pop((src_ticket_id, last_sha), None):
@@ -2592,7 +2588,7 @@ def convert_issues(source, dest, only_issues = None, blacklist_issues = None):
                         #event_data['commit_repository'] = target_url_git_repo
                         event_data['commit_repository'] = target_url_issues_repo
                 gh_update_issue_property(dest, issue, 'state', newstate, **event_data)
-            return newstate, new_labels
+            return newstate, []
 
         attachments = []
         for change in changelog:
@@ -2687,6 +2683,11 @@ def convert_issues(source, dest, only_issues = None, blacklist_issues = None):
             comment_data['attachments'] = attachments
             attachments = []
             gh_comment_issue(dest, issue, comment_data, src_ticket_id, minimize=False)
+
+        # Update title to final state after processing all changes
+        final_title, _ = title_status(src_ticket_data.get('summary', 'No title'))
+        if github and final_title != issue_data.get('title'):
+            gh_update_issue_property(dest, issue, 'title', final_title)
 
         ticketcount += 1
         if ticketcount % 10 == 0 and sleep_after_10tickets > 0 :
