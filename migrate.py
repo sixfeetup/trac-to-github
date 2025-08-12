@@ -42,6 +42,7 @@ import mimetypes
 import types
 import gzip
 import json
+import csv
 from collections import defaultdict
 from copy import copy
 from datetime import datetime
@@ -2218,6 +2219,12 @@ def get_all_tickets(filter_issues):
 
 def convert_issues(source, dest, only_issues = None, blacklist_issues = None):
     conv_help = IssuesConversionHelper(source)
+    
+    # Initialize CSV file for issue tracking
+    csv_filename = 'migrated_issues.csv'
+    csv_file = open(csv_filename, 'w', newline='', encoding='utf-8')
+    csv_writer = csv.writer(csv_file)
+    csv_writer.writerow(['Title', 'Description', 'Labels', 'Assignee', 'URL', 'Priority', 'Status', 'Sprint'])
 
     if migrate_milestones:
         for milestone_name in get_all_milestones(source):
@@ -2694,15 +2701,48 @@ def convert_issues(source, dest, only_issues = None, blacklist_issues = None):
         
         # Update assignee to final state based on username mapping
         final_owner = src_ticket_data.get('owner')
+        final_assignee_name = ""
         if final_owner and github:
             final_assignee = gh_user_url_list(dest, final_owner)
             if final_assignee:
                 gh_update_issue_property(dest, issue, 'assignees', final_assignee, oldval=[])
+                # Get the mapped username as a string
+                mapped_username = gh_username(dest, final_owner)
+                final_assignee_name = mapped_username if mapped_username else final_owner
+        elif final_owner:
+            # Get the mapped username as a string
+            mapped_username = gh_username(dest, final_owner)
+            final_assignee_name = mapped_username if mapped_username else final_owner
+
+        # Write CSV row for this issue
+        issue_url = f"{target_url_issues_repo}/issues/{issue.number}" if github else ""
+        final_priority = src_ticket_data.get('priority', '')
+        final_status = src_ticket_data.get('status', '')
+        final_milestone = src_ticket_data.get('milestone', '')
+        
+        # Get the description from the original ticket data (without migration footer)
+        description = src_ticket_data.get('description', '').strip()
+        
+        csv_writer.writerow([
+            final_title,
+            description,
+            "",  # Labels always empty as requested
+            final_assignee_name,
+            issue_url,
+            final_priority,
+            final_status,
+            final_milestone
+        ])
+        csv_file.flush()
 
         ticketcount += 1
         if ticketcount % 10 == 0 and sleep_after_10tickets > 0 :
             print ('%d tickets migrated. Waiting %d seconds to let GitHub/Trac cool down.' % (ticketcount, sleep_after_10tickets))
             sleep(sleep_after_10tickets)
+
+    # Close CSV file
+    csv_file.close()
+    print(f'CSV file "{csv_filename}" created with {ticketcount} issues.')
 
 def convert_wiki(source, dest):
     exclude_authors = ['trac']
