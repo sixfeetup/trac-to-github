@@ -2725,13 +2725,13 @@ def convert_issues(source, dest, only_issues = None, blacklist_issues = None):
             final_assignee = gh_user_url_list(dest, final_owner)
             if final_assignee:
                 gh_update_issue_property(dest, issue, 'assignees', final_assignee, oldval=[])
-                # Get the mapped username as a string
+                # Get the mapped GitHub username as a string (not Trac username)
                 mapped_username = gh_username(dest, final_owner)
-                final_assignee_name = mapped_username if mapped_username else final_owner
+                final_assignee_name = mapped_username if mapped_username else ""
         elif final_owner:
-            # Get the mapped username as a string
+            # Get the mapped GitHub username as a string (not Trac username)  
             mapped_username = gh_username(dest, final_owner)
-            final_assignee_name = mapped_username if mapped_username else final_owner
+            final_assignee_name = mapped_username if mapped_username else ""
 
         # Update milestone to final state
         if github and migrate_milestones:
