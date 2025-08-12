@@ -2721,17 +2721,16 @@ def convert_issues(source, dest, only_issues = None, blacklist_issues = None):
         # Update assignee to final state based on username mapping
         final_owner = src_ticket_data.get('owner')
         final_assignee_name = ""
-        if final_owner and github:
-            final_assignee = gh_user_url_list(dest, final_owner)
-            if final_assignee:
-                gh_update_issue_property(dest, issue, 'assignees', final_assignee, oldval=[])
-                # Get the mapped GitHub username as a string (not Trac username)
-                mapped_username = gh_username(dest, final_owner)
-                final_assignee_name = mapped_username if mapped_username else ""
-        elif final_owner:
-            # Get the mapped GitHub username as a string (not Trac username)  
-            mapped_username = gh_username(dest, final_owner)
-            final_assignee_name = mapped_username if mapped_username else ""
+        if final_owner:
+            # Check if there's an explicit mapping in users_map
+            if final_owner in users_map and users_map[final_owner]:
+                # Use the mapped GitHub username
+                final_assignee_name = users_map[final_owner]
+                if github:
+                    final_assignee = gh_user_url_list(dest, final_owner)
+                    if final_assignee:
+                        gh_update_issue_property(dest, issue, 'assignees', final_assignee, oldval=[])
+            # If no mapping exists, leave assignee blank (final_assignee_name stays "")
 
         # Update milestone to final state
         if github and migrate_milestones:
