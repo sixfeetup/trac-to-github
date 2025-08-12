@@ -2498,7 +2498,7 @@ def convert_issues(source, dest, only_issues = None, blacklist_issues = None):
         title, status = title_status(tmp_src_ticket_data.pop('summary'))
         milestone, labels = milestone_labels(tmp_src_ticket_data, status)
         issue_data['title'] = title
-        issue_data['labels'] = labels
+        # issue_data['labels'] = labels
         if milestone:
             issue_data['milestone'] = milestone
 
@@ -2527,6 +2527,10 @@ def convert_issues(source, dest, only_issues = None, blacklist_issues = None):
                     break  # on the last status change
 
         issue_data['description'] = issue_description(tmp_src_ticket_data)
+
+        # Update title to final state after processing all changes
+        final_title, _ = title_status(src_ticket_data.get('summary', 'No title'))
+        issue_data['title'] = final_title
 
         issue = gh_create_issue(dest, issue_data)
 
@@ -2563,13 +2567,13 @@ def convert_issues(source, dest, only_issues = None, blacklist_issues = None):
             }
             if milestone:
                 gh_update_issue_property(dest, issue, 'milestone', milestone, None, **event_data)
-            for label in labels:
-                update_labels([], label, None)
+            # for label in labels:
+            #     update_labels([], label, None)
             gh_update_issue_property(dest, issue, 'assignees', assignees, oldval=[], **event_data)
 
         issue_state, label = map_status(status)
-        if label and label not in labels:
-            update_labels([], label, None)
+        # if label and label not in labels:
+        #     update_labels([], label, None)
         last_sha = None
 
         def change_status(newvalue):
@@ -2617,50 +2621,44 @@ def convert_issues(source, dest, only_issues = None, blacklist_issues = None):
             # Process label-affecting field changes silently (no comments, just update labels)
             if change_type == "status":
                 issue_state, new_labels = change_status(newvalue)
-                labels = new_labels
+                # labels = new_labels
             elif change_type == "resolution":
                 oldresolution = map_resolution(oldvalue)
                 newresolution = map_resolution(newvalue)
-                labels = update_labels(labels, newresolution, oldresolution, 'resolution')
+                # labels = update_labels(labels, newresolution, oldresolution, 'resolution')
             elif change_type == "component":
                 oldlabel = map_component(oldvalue)
                 newlabel = map_component(newvalue)
-                labels = update_labels(labels, newlabel, oldlabel, 'component')
+                # labels = update_labels(labels, newlabel, oldlabel, 'component')
             elif change_type == "summary":
-                oldtitle, oldstatus = title_status(oldvalue)
-                title, status = title_status(newvalue)
-                if title != oldtitle:
-                    issue_data['title'] = title
-                    if github:
-                        gh_update_issue_property(dest, issue, 'title', title, oldval=oldtitle, **event_data)
-                if status is not None:
-                    issue_state, new_labels = change_status(status)
-                    labels = new_labels
+                # Update the source data to reflect final state
+                src_ticket_data['summary'] = newvalue
             elif change_type == "milestone":
                 oldmilestone, oldlabel = map_milestone(oldvalue)
                 newmilestone, newlabel = map_milestone(newvalue)
-                labels = update_labels(labels, newlabel, oldlabel, 'milestone')
+                # labels = update_labels(labels, newlabel, oldlabel, 'milestone')
             elif change_type == "type":
                 oldtype = map_tickettype(oldvalue)
                 newtype = map_tickettype(newvalue)
-                labels = update_labels(labels, newtype, oldtype, 'type')
+                # labels = update_labels(labels, newtype, oldtype, 'type')
             elif change_type == "priority":
                 oldlabel = map_priority(oldvalue)
                 newlabel = map_priority(newvalue)
-                labels = update_labels(labels, newlabel, oldlabel, 'priority')
+                # labels = update_labels(labels, newlabel, oldlabel, 'priority')
             elif change_type == "severity":
                 oldlabel = map_severity(oldvalue)
                 newlabel = map_severity(newvalue)
-                labels = update_labels(labels, newlabel, oldlabel, 'severity')
+                # labels = update_labels(labels, newlabel, oldlabel, 'severity')
             elif change_type == "keywords":
-                oldkeywords, oldkeywordlabels = map_keywords(oldvalue)
-                newkeywords, newkeywordlabels = map_keywords(newvalue)
-                for label in oldkeywordlabels:
-                    with contextlib.suppress(ValueError):
-                        labels.remove(label)
-                for label in newkeywordlabels:
-                    labels.append(label)
-                    gh_ensure_label(dest, label, label_category='keyword')
+                # oldkeywords, oldkeywordlabels = map_keywords(oldvalue)
+                # newkeywords, newkeywordlabels = map_keywords(newvalue)
+                # for label in oldkeywordlabels:
+                #     with contextlib.suppress(ValueError):
+                #         labels.remove(label)
+                # for label in newkeywordlabels:
+                #     labels.append(label)
+                #     gh_ensure_label(dest, label, label_category='keyword')
+                pass
             
             # Continue with comment/attachment processing
             if change_type == "attachment":
