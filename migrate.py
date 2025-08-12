@@ -161,8 +161,8 @@ trac_url_report = os.path.join(trac_url_dir, subdir.report.value)
 trac_url_attachment = os.path.join(trac_url_dir, subdir.attachment.value)
 
 # Public URLs for display in issues
-trac_public_url_dir = os.path.dirname(trac_public_url)
-trac_public_url_ticket = os.path.join(trac_public_url_dir, subdir.ticket.value)
+# Use the full trac_public_url as base to preserve project name
+trac_public_url_ticket = os.path.join(trac_public_url, subdir.ticket.value)
 
 if config.has_option('target', 'issues_repo_url'):
     target_url_issues_repo = config.get('target', 'issues_repo_url')
