@@ -274,7 +274,7 @@ if attachment_export:
         attachment_export_url = target_url_issues_repo
         if not attachment_export_url.endswith('/') :
             attachment_export_url += '/'
-        attachment_export_url += 'releases/tag/ticketmigration/'
+        attachment_export_url += 'releases/download/ticketmigration/'
 
 must_convert_wiki = config.getboolean('wiki', 'migrate')
 wiki_export_dir = None
