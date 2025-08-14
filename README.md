@@ -28,7 +28,9 @@ Post-migration steps:
 * The script will output `migrated_issues.csv`. Use this to run https://github.com/hillairet/ciftt for updating the approprite values on the GitHub issues
 * The script also saves all the attachments to a folder (`archive/attachments/`), and these need to be uploaded, by adding them as release assets:
   * In GitHub, create a new release/tag in the repo called `ticketmigration`.
-  * In the `archive/attachments` folder, use the GitHub CLI to upload the files as release assets: `gh release upload ticketmigration *`
+  * Clone the repo for the project (where the new issues live)
+  * Move the `attachments` folder into the root of the repo. (Do not commit, this is just so that the CLI knows which project we are on)
+  * From the root of the repo, use the GitHub CLI to upload the files as release assets: `gh release upload ticketmigration attachments/*`
 
 What
 =====
