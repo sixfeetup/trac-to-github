@@ -274,7 +274,7 @@ if attachment_export:
         attachment_export_url = target_url_issues_repo
         if not attachment_export_url.endswith('/') :
             attachment_export_url += '/'
-        attachment_export_url += 'blob/main/'
+        attachment_export_url += 'releases/tag/ticketmigration/'
 
 must_convert_wiki = config.getboolean('wiki', 'migrate')
 wiki_export_dir = None
@@ -1809,7 +1809,8 @@ def attachment_path(src_ticket_id, filename):
         from hashlib import md5
         extension = pathlib.Path(filename).suffix
         filename = md5(filename.encode('utf-8')).hexdigest() + extension
-    return 'ticket' + str(src_ticket_id) + '/' + filename
+    # Save all attachments to single folder with ticket prefix to avoid conflicts
+    return 'ticket' + str(src_ticket_id) + '_' + filename
 
 def gh_attachment_url(src_ticket_id, filename):
     # Example attached to https://github.com/sagemath/trac-to-github/issues/53:
@@ -1924,10 +1925,22 @@ def gh_create_attachment(dest, issue, filename, src_ticket_id, attachment=None, 
         logging.info('Attachment link %s' % a.url)
 
         if comment:
-            if github:
-                note = 'Attachment [%s](%s) by %s created at %s' % (filename, a.url, comment['user'], comment['created_at'])
+            # Check if attachment is an image for inline display
+            image_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.svg', '.webp'}
+            file_extension = os.path.splitext(filename.lower())[1]
+            
+            if file_extension in image_extensions:
+                # Display image inline
+                if github:
+                    note = '![%s](%s)' % (filename, a.url)
+                else:
+                    note = '![%s](%s)' % (filename, a.url)
             else:
-                note = 'Attachment: **[%s](%s)**' % (filename, a.url)
+                # Display as link for non-images
+                if github:
+                    note = '[%s](%s)' % (filename, a.url)
+                else:
+                    note = '**[%s](%s)**' % (filename, a.url)
 
     elif gh_user is not None:
         if dest is None : return

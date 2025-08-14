@@ -21,7 +21,7 @@ Credentials:
 
 Running the script:
 * Use a tmux session in case you get disconnected
-* When running on a new project, delete the cache: `$ rm -rf trac_cache`
+* When running on a new project, delete the cache and attachements: `$ rm -rf trac_cache archive/*`
 * With the virtualenv active, run `$ ./migrate.py`
 
 Post-migration steps:
