@@ -85,7 +85,10 @@ migrate: yes
 
 # If defined, import only these issues
 # only_issues: [ 30000, 30001 ]
-#only_issues: [5601,]
+# only_issues: [5601,]
+
+# Or start from a specific ticket and work on from there
+# start_from_ticket = 123
 
 # If defined, do not import these issues
 # blacklist_issues: [ 268, 843 ]

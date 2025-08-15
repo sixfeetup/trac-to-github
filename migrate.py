@@ -211,6 +211,9 @@ if config.has_option('issues', 'only_issues'):
 blacklist_issues = None
 if config.has_option('issues', 'blacklist_issues'):
     blacklist_issues = ast.literal_eval(config.get('issues', 'blacklist_issues'))
+start_from_ticket = None
+if config.has_option('issues', 'start_from_ticket'):
+    start_from_ticket = config.getint('issues', 'start_from_ticket')
 filter_issues = 'max=0&order=id'
 if config.has_option('issues', 'filter_issues') :
     filter_issues = config.get('issues', 'filter_issues')
@@ -2232,7 +2235,7 @@ def get_all_tickets(filter_issues):
         call.ticket.get(ticket)
     return call()
 
-def convert_issues(source, dest, only_issues = None, blacklist_issues = None):
+def convert_issues(source, dest, only_issues = None, blacklist_issues = None, start_from_ticket = None):
     conv_help = IssuesConversionHelper(source)
     
     # Initialize CSV file for issue tracking
@@ -2277,6 +2280,9 @@ def convert_issues(source, dest, only_issues = None, blacklist_issues = None):
             continue
         if blacklist_issues and src_ticket_id in blacklist_issues:
             print("SKIP blacklisted ticket #%s" % src_ticket_id)
+            continue
+        if start_from_ticket and src_ticket_id < start_from_ticket:
+            print("SKIP ticket #%s (before start_from_ticket %s)" % (src_ticket_id, start_from_ticket))
             continue
 
         if github and not only_issues and not blacklist_issues and not config.has_option('issues', 'filter_issues') :
@@ -2962,7 +2968,7 @@ if __name__ == "__main__":
     try:
         if must_convert_issues:
             read_closing_commits()
-            convert_issues(source, dest, only_issues = only_issues, blacklist_issues = blacklist_issues)
+            convert_issues(source, dest, only_issues = only_issues, blacklist_issues = blacklist_issues, start_from_ticket = start_from_ticket)
 
         if must_convert_wiki:
             convert_wiki(source, dest)
