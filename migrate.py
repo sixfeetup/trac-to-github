@@ -80,6 +80,7 @@ default_config = {
 # set to .md if the wiki pages need to be browseable via a normal GitHub repo
 MD_EXT = ''
 
+# Default sleep after request - will be overridden by config
 sleep_after_request = 2.0
 sleep_after_attachment = 60.0
 sleep_after_10tickets = 0.0  # TODO maybe this can be reduced due to the longer sleep after attaching something
@@ -214,6 +215,11 @@ if config.has_option('issues', 'blacklist_issues'):
 start_from_ticket = None
 if config.has_option('issues', 'start_from_ticket'):
     start_from_ticket = config.getint('issues', 'start_from_ticket')
+rate_limit_delay = 0
+if config.has_option('issues', 'rate_limit_delay'):
+    rate_limit_delay = config.getfloat('issues', 'rate_limit_delay')
+    # Override the default sleep_after_request with the configured value
+    sleep_after_request = rate_limit_delay
 filter_issues = 'max=0&order=id'
 if config.has_option('issues', 'filter_issues') :
     filter_issues = config.get('issues', 'filter_issues')
@@ -2963,7 +2969,7 @@ if __name__ == "__main__":
             dest = Repository(requester, None, dict(name=github_project,
                                                     url=target_url_issues_repo), None)
             #print(dest.url)
-            sleep_after_request = 0
+            # Keep rate limiting even in archive mode to prevent secondary rate limits
 
     try:
         if must_convert_issues:
