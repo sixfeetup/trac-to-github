@@ -25,12 +25,25 @@ Running the script:
 * With the virtualenv active, run `$ ./migrate.py`
 
 Post-migration steps:
-* The script will output `migrated_issues.csv`. Use this to run https://github.com/hillairet/ciftt for updating the approprite values on the GitHub issues
-* The script also saves all the attachments to a folder (`archive/attachments/`), and these need to be uploaded, by adding them as release assets:
+
+There are a few steps that need to be run separately/manually. Files are output at the level where the script is run
+
+* `migrated_issues.csv`:  Use this to run https://github.com/hillairet/ciftt for updating the approprite values on the GitHub issues
+* `archive/attachments/`: The script also saves all the attachments to a folder, and these need to be uploaded, by adding them as release assets:
   * In GitHub, create a new release/tag in the repo called `ticketmigration`.
   * Clone the repo for the project (where the new issues live)
   * Move the `attachments` folder into the root of the repo. (Do not commit, this is just so that the CLI knows which project we are on)
   * From the root of the repo, use the GitHub CLI to upload the files as release assets: `gh release upload ticketmigration attachments/*`
+* `wiki`: If saving wiki pages, they are stored as Markdown files
+  * The wiki has its own repo. It matches the code repo, but ends in `.wiki.git` instead of just `.git`. (The wiki landing in the UI has the path to clone, but doesn't provide the SSH version)
+  * You will first need to create an initial page in the UI for the repo to be created
+  * You may need to move the wiki folder outside of `trac-to-github`, to set it up as its own repo
+  * `$ git init`
+  * `$ git remote add origin [ssh url]`
+  * `$ git pull --rebase origin master`
+  * `$ git add *`
+  * `$ git commit -a`
+  * `$ git push origin master`
 
 What
 =====
