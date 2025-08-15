@@ -2964,9 +2964,12 @@ if __name__ == "__main__":
             github = Github(github_username, github_password, base_url=github_api_url)
         if github:
             dest = github.get_repo(github_project)
+            sleep(sleep_after_request)
             gh_user = github.get_user()
+            sleep(sleep_after_request)
             for l in dest.get_labels() :
                 gh_labels[l.name.lower()] = l
+                sleep(sleep_after_request)
             #print 'Existing labels:', gh_labels.keys()
         else:
             requester = MigrationArchiveWritingRequester(migration_archive, wiki_export_dir)
