@@ -1786,8 +1786,12 @@ def gh_create_issue(dest, issue_data) :
 
     if github:
         description_pre = ""
-        description_pre += 'Original creator: ' + issue_data.pop('user') + '\n\n'
-        description_pre += 'Original creation time: ' + str(issue_data.pop('created_at')) + '\n\n'
+        user = issue_data.pop('user', None)
+        if user:
+            description_pre += 'Original creator: ' + user + '\n\n'
+        created_at = issue_data.pop('created_at', None)
+        if created_at:
+            description_pre += 'Original creation time: ' + str(created_at) + '\n\n'
         description = description_pre + description
     else:
         user_url = gh_user_url(dest, issue_data['user'])
