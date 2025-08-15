@@ -2967,9 +2967,11 @@ if __name__ == "__main__":
             sleep(sleep_after_request)
             gh_user = github.get_user()
             sleep(sleep_after_request)
-            for l in dest.get_labels() :
+            # get_labels() is a single API call that returns all labels
+            all_labels = dest.get_labels()
+            sleep(sleep_after_request)
+            for l in all_labels:
                 gh_labels[l.name.lower()] = l
-                sleep(sleep_after_request)
             #print 'Existing labels:', gh_labels.keys()
         else:
             requester = MigrationArchiveWritingRequester(migration_archive, wiki_export_dir)
