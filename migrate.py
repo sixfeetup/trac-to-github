@@ -2295,7 +2295,7 @@ def convert_issues(source, dest, only_issues = None, blacklist_issues = None, st
             print("SKIP ticket #%s (before start_from_ticket %s)" % (src_ticket_id, start_from_ticket))
             continue
 
-        if github and not only_issues and not blacklist_issues and not config.has_option('issues', 'filter_issues') :
+        if github and not only_issues and not blacklist_issues and not start_from_ticket and not config.has_option('issues', 'filter_issues') :
             while nextticketid < src_ticket_id :
                 print("Ticket %d missing in Trac. Generating empty one in GitHub." % nextticketid)
 
