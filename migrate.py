@@ -1804,12 +1804,30 @@ def gh_create_issue(dest, issue_data) :
     ## else:
     ##     assignees = [assignee]
 
-    gh_issue = dest.create_issue(issue_data.pop('title'),
-                                 description,
-                                 #assignee=assignee, assignees=assignees,
-                                 milestone=issue_data.pop('milestone', GithubObject.NotSet),
-                                 labels=labels,
-                                 **issue_data)
+    title = issue_data.pop('title')
+    milestone = issue_data.pop('milestone', GithubObject.NotSet)
+
+    try:
+        gh_issue = dest.create_issue(title,
+                                     description,
+                                     #assignee=assignee, assignees=assignees,
+                                     milestone=milestone,
+                                     labels=labels,
+                                     **issue_data)
+    except GithubException as e:
+        # Check if the error is due to body being too long
+        if "body is too long" in str(e):
+            log.warning(f"Issue body too long, creating with truncated message. Original error: {e}")
+            # Create issue with truncated description
+            gh_issue = dest.create_issue(title,
+                                         "message body too long, refer back to Trac",
+                                         #assignee=assignee, assignees=assignees,
+                                         milestone=milestone,
+                                         labels=labels,
+                                         **issue_data)
+        else:
+            # Re-raise the exception if it's not the body length issue
+            raise
 
     log.debug("  created issue " + str(gh_issue))
     sleep(sleep_after_request)
