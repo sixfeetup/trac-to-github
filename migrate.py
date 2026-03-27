@@ -48,6 +48,7 @@ from copy import copy
 from datetime import datetime
 from difflib import unified_diff
 from time import sleep
+import requests
 from roman import toRoman
 from xmlrpc import client
 from github import Github, GithubObject, InputFileContent
@@ -181,6 +182,10 @@ elif config.has_option('target', 'username'):
 else:
     github_username = None
 github_project = config.get('target', 'project_name')
+
+slack_webhook_url = None
+if config.has_option('target', 'slack_webhook_url'):
+    slack_webhook_url = config.get('target', 'slack_webhook_url')
 
 migration_archive = None
 if config.has_option('target', 'migration_archive'):
@@ -2961,6 +2966,11 @@ def output_component_frequency(data):
             for key, frequency in data:
                 f.write(' '.join([key, str(frequency)]) +'\n')
 
+def notify_slack(message):
+    if not slack_webhook_url:
+        return
+    requests.post(slack_webhook_url, json={"text": message})
+
 if __name__ == "__main__":
 
     from rich.logging import RichHandler
@@ -3005,6 +3015,11 @@ if __name__ == "__main__":
 
         if must_convert_wiki:
             convert_wiki(source, dest)
+    except Exception as e:
+        notify_slack(f":x: Migration failed: {e}")
+        raise
+    else:
+        notify_slack(":white_check_mark: Migration completed successfully!")
     finally:
         if must_convert_issues and not github:
             # Patch in labels

@@ -13,21 +13,31 @@ Setup:
 * `$ pip install -r requirements.txt`
 * `$ cp migrate.cfg.sfupexample migrate.cfg`
 
-Edit the `migrate.cfg`. There are various values in `[source]` and `[target]` that need to be updated with your project name.
+Edit the `migrate.cfg`. There are various values in `[source]` and `[target]` that need to be updated with your project name:
+  * `url`
+  * `trac_public_url` (do not leave a trailing slash)
+  * `path`
+  * `issues_repo_url`
+  * `git_repo_url` (will likely be the same as `issues_repo_url`, but not always)
+  * `project_name`
 
 Credentials:
 * "Trac Admin" in 1Password for admin username and password for Trac - used in `[source]`:`url`
 * Christine's GitHub access token (`token` in migrate.cfg). This means that Christine's user needs to have permission to create issues in the target repo.
 
 Running the script:
-* Use a tmux session in case you get disconnected
-* When running on a new project, delete the cache and attachements: `$ rm -rf trac_cache archive/*`
+* Use a tmux session in case you get disconnected: `tmux attach-session -t tracmigrate`
+* When running on a new project:
+  * delete the cache and attachements: `$ rm -rf trac_cache archive/*`
+  * make sure `start_from_ticket` in `migrate.cfg` is set to `1`, and comment out other filters (like `only_issues` or `blacklist_issues`)
 * With the virtualenv active, run `$ ./migrate.py`
+* If the script hits an error and exits, check the number of the issue it stopped on. You can then work to fix the error, or skip it. Set `start_from_ticket` to that ticket number, and re-run the migration.
 
 Post-migration steps:
 
 There are a few steps that need to be run separately/manually. Files are output at the level where the script is run
 
+* If the body of a ticket was too long, the Issue is created with text "message body too long, refer back to Trac". Search for this text in the GitHub issues to find issues you may want to manually update
 * `migrated_issues.csv`:  Use this to run https://github.com/hillairet/ciftt for updating the approprite values on the GitHub issues
 * `archive/attachments/`: The script also saves all the attachments to a folder, and these need to be uploaded, by adding them as release assets:
   * In GitHub, create a new release/tag in the repo called `ticketmigration`.
