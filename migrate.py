@@ -284,11 +284,15 @@ if attachment_export:
         attachment_export_url = config.get('attachments', 'export_url')
         if not attachment_export_url.endswith('/') :
             attachment_export_url += '/'
+        attachment_release_base_url = None
     else:
-        attachment_export_url = target_url_issues_repo
-        if not attachment_export_url.endswith('/') :
-            attachment_export_url += '/'
-        attachment_export_url += 'releases/download/ticketmigration/'
+        base = target_url_issues_repo
+        if not base.endswith('/'):
+            base += '/'
+        attachment_release_base_url = base + 'releases/download/'
+        attachment_export_url = attachment_release_base_url + 'ticketmigration/'
+
+_attachment_release_map_path = os.path.join(attachment_export_dir, 'attachment_release_map.json') if attachment_export else None
 
 must_convert_wiki = config.getboolean('wiki', 'migrate')
 wiki_export_dir = None
@@ -1502,9 +1506,7 @@ class IssuesConversionHelper(WikiConversionHelper):
             url = '%s/ticket/%s/%s' % (trac_url_attachment, str(self._ticket_id), filename)
         else:
             a, _, _ = gh_create_attachment(dest, None, filename, self._ticket_id, None)
-            if a.url.endswith('.gz'):
-                filename += '.gz'
-            url = os.path.join(attachment_export_url, attachment_path(self._ticket_id, filename))
+            url = a.url
 
         return r'[%s](%s)' % (label, url)
 
@@ -1536,9 +1538,11 @@ class IssuesConversionHelper(WikiConversionHelper):
                 url = filename
             elif filename.startswith('ticket:'):
                 _, ticket_id, fname = filename.split(':')
-                url = os.path.join(attachment_export_url, attachment_path(ticket_id, fname))
+                a_path = attachment_path(ticket_id, fname)
+                url = _release_url_for(a_path) + a_path
             else:
-                url = os.path.join(attachment_export_url, attachment_path(self._ticket_id, filename))
+                a_path = attachment_path(self._ticket_id, filename)
+                url = _release_url_for(a_path) + a_path
 
         if len(match.groups()) == 3:
             return r'<div align="%s"><img src="%s" width="%s"></div>' % (alignment, url, width)
@@ -1883,6 +1887,32 @@ mime_type_allowed_extensions = {
     'image/png': [".png"],
     }
 
+_attachment_release_urls = {}  # a_path -> base URL for that asset's release
+
+def _load_attachment_release_map():
+    if _attachment_release_map_path and os.path.exists(_attachment_release_map_path):
+        with open(_attachment_release_map_path) as f:
+            _attachment_release_urls.update(json.load(f))
+
+def _release_url_for(a_path):
+    """Return the base release URL for a given attachment path, assigning it to a release
+    if not already assigned. Rotates to a new release every 1000 assets.
+    The mapping is persisted to disk so restarts don't reassign files to different releases."""
+    if a_path not in _attachment_release_urls:
+        asset_count = len(_attachment_release_urls)
+        if attachment_release_base_url:
+            index = asset_count // 1000
+            tag = 'ticketmigration' if index == 0 else f'ticketmigration-{index + 1}'
+            _attachment_release_urls[a_path] = attachment_release_base_url + tag + '/'
+        else:
+            _attachment_release_urls[a_path] = attachment_export_url
+        if _attachment_release_map_path:
+            with open(_attachment_release_map_path, 'w') as f:
+                json.dump(_attachment_release_urls, f)
+    return _attachment_release_urls[a_path]
+
+_load_attachment_release_map()
+
 def gh_create_attachment(dest, issue, filename, src_ticket_id, attachment=None, comment=None):
     note = None
     if attachment_export:
@@ -1938,13 +1968,13 @@ def gh_create_attachment(dest, issue, filename, src_ticket_id, attachment=None, 
         if github or not attachment:
             def create(asset_name, asset_content_type, asset_url, **kwds):
                 # Only create the record locally
-                return Attachment(dest._requester, None, {'url': attachment_export_url + a_path},
+                return Attachment(dest._requester, None, {'url': _release_url_for(a_path) + a_path},
                                   completed=True)
         elif not github:
             # Migration archive mode - override any previous create_repository_file assignment
             def create(asset_name, asset_content_type, asset_url, **kwds):
                 # Only create the record locally
-                return Attachment(dest._requester, None, {'url': attachment_export_url + a_path},
+                return Attachment(dest._requester, None, {'url': _release_url_for(a_path) + a_path},
                                   completed=True)
 
         os.makedirs(os.path.dirname(local_filename), exist_ok=True)
