@@ -28,7 +28,7 @@ Credentials:
 Running the script:
 * Use a tmux session in case you get disconnected: `tmux attach-session -t tracmigrate`
 * When running on a new project:
-  * delete the cache and attachements: `$ rm -rf trac_cache archive/*`
+  * delete the cache and attachements: `$ rm -rf trac_cache archive/* wiki/*`
   * make sure `start_from_ticket` in `migrate.cfg` is set to `1`, and comment out other filters (like `only_issues` or `blacklist_issues`)
 * With the virtualenv active, run `$ ./migrate.py`
 * If the script hits an error and exits, check the number of the issue it stopped on. You can then work to fix the error, or skip it. Set `start_from_ticket` to that ticket number, and re-run the migration.
@@ -44,7 +44,8 @@ There are a few steps that need to be run separately/manually. Files are output 
   * Clone the repo for the project (where the new issues live)
   * Move the `attachments` folder into the root of the repo. (Do not commit, this is just so that the CLI knows which project we are on)
   * From the root of the repo, use the GitHub CLI to upload the files as release assets: `gh release upload ticketmigration attachments/*`
-* `wiki`: If saving wiki pages, they are stored as Markdown files
+  * If there are more than 1000 attachments, create another release/tag talled `ticketmigration-2`. Increment for each 1000.
+* `wiki`: If saving wiki pages, they are stored as Markdown files in the `wiki/` folder. (Not in `archive/`)
   * The wiki has its own repo. It matches the code repo, but ends in `.wiki.git` instead of just `.git`. (The wiki landing in the UI has the path to clone, but doesn't provide the SSH version)
   * You will first need to create an initial page in the UI for the repo to be created
   * You may need to move the wiki folder outside of `trac-to-github`, to set it up as its own repo
